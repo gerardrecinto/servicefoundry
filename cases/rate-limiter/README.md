@@ -32,6 +32,15 @@ An API platform needs to cap how many requests a client can make in a given wind
 - `CounterStore` — the storage backend (e.g., a shared cache) for LimitCounter state; the only module aware it's distributed.
 - `TierResolver` — maps Client to Tier; cached aggressively since tier changes are rare compared to request volume.
 
+## Data Model
+- `CounterStore` entry: key `(client_id, window_start)` → count, with a TTL equal to the window length so expired counters self-clean without a sweep job.
+- Token-bucket variant: key `client_id` → `(tokens, last_refill_ts)`; refill is computed lazily on each `check()` call rather than by a background timer, so an idle client costs nothing between requests.
+- No relational schema here — the Client→Tier mapping is owned by the identity/billing system of record; `TierResolver` only caches a read-through copy.
+
+## Sequence Flows
+- `check(client_id)`: `TierResolver` resolves tier (cache hit in steady state) → `LimitAlgorithm` reads/updates the `CounterStore` entry for that client → `Allowed` or `Denied(retry_after)` returned. Entirely synchronous — the caller blocks on this inline in its own request path.
+- Tier change: identity system updates a client's tier → `TierResolver`'s cached entry is invalidated (push or short TTL) → the next `check()` re-resolves it. Fully asynchronous relative to any in-flight `check()` call.
+
 ## Edge Cases & Failure Modes
 - CounterStore is briefly unreachable — the algorithm fails open (allow) or closed (deny) based on an explicit, documented per-tier policy, not an accidental default; failing open silently for every client would defeat the limiter's purpose during exactly the incident it exists to contain.
 - Clock skew across servers under a fixed-window algorithm causes boundary bursts — addressed by preferring a sliding-window or token-bucket algorithm where correctness doesn't depend on all servers agreeing on wall-clock window edges.

@@ -36,6 +36,16 @@ Multiple internal services need to send email, SMS, and push notifications to us
 - `PreferenceGate` — checks RecipientPreference before a DeliveryAttempt is created; sits upstream of `ProviderRouter` so an opted-out user never reaches a provider call at all.
 - `RetryScheduler` — owns backoff timing for transient failures; decoupled from `ProviderRouter` so retry policy can change without touching provider integration code.
 
+## Data Model
+- `NotificationRequests`: `id`, `idempotency_key` (unique), `template_id`, `recipient`, `variables` (JSON), `status`.
+- `DeliveryAttempts`: `id`, `request_id`, `channel`, `provider`, `attempt_number`, `outcome`, `attempted_at` — one-to-many off `NotificationRequests`, indexed on `request_id` for status lookups.
+- `RecipientPreferences`: `(user_id, channel)` → `opted_out` — read at acceptance and again immediately before each `DeliveryAttempt`.
+- `Templates`: versioned rows keyed `(template_id, version)`; a request stores the resolved version it actually rendered with, which is what makes a bad render traceable to a specific version (see Operations).
+
+## Sequence Flows
+- Accept: `POST /notifications` checked against `idempotency_key` (returns the existing request if seen) → `TemplateRenderer` validates variables synchronously, failing fast on a mismatch → `NotificationRequest` persisted and an accepted response returned immediately, before any send happens.
+- Deliver (async): `PreferenceGate` checked → `ProviderRouter` selects a provider → `DeliveryAttempt` created and sent → on transient failure, `RetryScheduler` schedules a retry with backoff, re-checking `PreferenceGate` again before each re-attempt.
+
 ## Edge Cases & Failure Modes
 - Calling service retries `POST /notifications` after a network timeout — idempotency key ensures one send, not one per retry.
 - Primary provider for a channel is degraded but not fully down (elevated latency, some failures) — `ProviderRouter` fails over based on an error-rate threshold over a rolling window, not on a single failure, to avoid flapping between providers on one bad response.

@@ -36,6 +36,15 @@ A logistics company needs to get packages from a depot to a customer's address, 
 - `AttemptDeduper` — sits in front of `PackageLifecycle`, collapsing duplicate/out-of-order device events using event timestamps and ids before they reach the state machine.
 - `NotificationTrigger` — subscribes to Package state changes; decoupled from `PackageLifecycle` so a notification outage never blocks a delivery from being recorded.
 
+## Data Model
+- `Packages`: `id`, `address`, `status`, `current_route_id` nullable.
+- `Routes`: `id`, `driver_id`, `shift_date`. `RouteStops`: `(route_id, package_id, sequence)` — an ordered join table, since a Route is an ordered list of Packages rather than an unordered set.
+- `DeliveryAttempts`: `id`, `package_id`, `device_event_id` (unique per package — the dedup key), `event_timestamp`, `outcome`, `reason_code` — indexed on `(package_id, event_timestamp)` so `PackageLifecycle` can always replay attempts in true chronological order regardless of arrival order.
+
+## Sequence Flows
+- Morning batch: `RoutePlanner` reads all `at_depot` Packages plus Driver capacity → writes `Routes`/`RouteStops` in one batch job that must finish before shift start — a hard deadline, per Operations, not a best-effort background task.
+- Delivery attempt: driver device `POST /packages/{id}/attempts` → `AttemptDeduper` checks `device_event_id` and drops duplicates → orders the event by `event_timestamp` against anything already recorded → `PackageLifecycle` applies the transition → `NotificationTrigger` fires asynchronously off the resulting state change, decoupled so a notification-provider outage can't block the write.
+
 ## Edge Cases & Failure Modes
 - Device reports "delivered" twice — deduped, second report is a no-op.
 - Two attempt events for the same package arrive out of order (failure then, late, an earlier success) — ordered by event timestamp, not arrival time, before applying to the state machine.

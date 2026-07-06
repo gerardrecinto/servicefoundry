@@ -35,6 +35,15 @@ An events platform sells seats for a show. Many customers may try to book the sa
 - `HoldExpiry` — a background sweep that releases expired holds; deliberately separate from the request path so checkout latency doesn't depend on expiry-scanning work.
 - `BookingConfirmer` — the only module allowed to create a Booking, and only from a Hold it can verify is still valid at confirmation time.
 
+## Data Model
+- `Seats`: `id`, `event_id`, `status`, `current_hold_id` nullable — a single nullable reference is enough to enforce "at most one active Hold," rather than needing a uniqueness scan over a separate `Holds` table.
+- `Holds`: `id`, `seat_id`, `customer_id`, `expires_at`; unique on `(customer_id, seat_id)`, which is what makes the hold endpoint idempotent.
+- `Bookings`: `id`, `hold_id` (unique — a Hold converts to at most one Booking), `created_at`; no update path is modeled, matching the "immutable once created" rule in the Domain Model.
+
+## Sequence Flows
+- Hold: `POST /seats/{id}/hold` — `SeatAvailability`'s compare-and-set reads the current status and writes `held` only if it was `available`, in one atomic operation → a `Hold` row is created referencing the Seat. Fully synchronous, since the seat map UI needs an instant result.
+- Confirm: `POST /holds/{id}/confirm` — `BookingConfirmer` re-validates hold expiry at this moment, not by reusing the check from hold-creation time → on success, the Seat transitions `held → booked` and the `Booking` row is created in the same operation, so a crash between the two steps can't leave a booked-looking Seat with no Booking record.
+
 ## Edge Cases & Failure Modes
 - Two customers click the same seat within milliseconds — the compare-and-set in `SeatAvailability` guarantees exactly one hold succeeds; the other gets an immediate "seat no longer available," not a queued retry that might succeed later and confuse the UI.
 - Customer completes payment just as their hold expires — `BookingConfirmer` re-checks hold validity at confirmation, not just at hold creation, and fails the booking rather than let the seat double-sell against a hold that already lapsed.

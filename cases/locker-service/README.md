@@ -41,6 +41,15 @@ A Locker's physical state (door open/closed, weight sensor) is reported by the d
 - `ReservationLifecycle` — owns the state machine (`pending → occupied → picked_up` / `expired`); the only module allowed to transition a Reservation.
 - `DeviceReconciler` — consumes heartbeats and flags mismatches for a human/ops queue; never auto-corrects a Reservation's state from a heartbeat alone, since sensors can be wrong.
 
+## Data Model
+- `Locations`: `id`, `address`. `Lockers`: `id`, `location_id`, `size_class`, `state` — indexed on `(location_id, size_class, state)`, since `LockerAllocator`'s core query is "find an empty locker of size X at location Y."
+- `Reservations`: `id`, `order_id` (unique — idempotency key), `locker_id`, `access_code_hash` (never the code itself), `expires_at`, `status`.
+- `DeviceHeartbeats`: latest-per-locker reported physical state, stored separately from `Lockers.state` so `DeviceReconciler`'s async reconciliation never races the allocator's synchronous read of logical state.
+
+## Sequence Flows
+- Drop-off: courier `POST /reservations` (idempotent on `order_id`) → `LockerAllocator` finds and marks a `Locker` reserved → courier `POST /confirm-drop-off` → `AccessCodeIssuer` generates the code, `ReservationLifecycle` moves the reservation to `occupied`, customer is notified. Synchronous through allocation and confirmation; the customer notification is fire-and-forget.
+- Pickup: customer `POST /unlock` with code → `AccessCodeIssuer` validates it → `ReservationLifecycle` transitions `occupied → picked_up` → an unlock signal is sent to the locker. `DeviceReconciler` reconciles the resulting heartbeat later, asynchronously, off the customer-facing path.
+
 ## Edge Cases & Failure Modes
 - Courier retries `confirm-drop-off` after a timeout — idempotency key prevents a second code from being issued for the same reservation.
 - Customer's code expires while they're standing at the locker — `unlock` returns a specific expired-code error (not a generic failure), and the door stays locked; a new reservation/code requires re-authorization, not a silent extension.

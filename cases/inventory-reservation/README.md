@@ -34,6 +34,16 @@ An e-commerce checkout needs to hold stock for items in a cart during checkout, 
 - `ReservationSplitter` — decides how to split a requested quantity across warehouses when no single one can cover it; operates only on `available` quantities read from `StockLedger`, never mutates directly.
 - `ReservationExpiry` — background sweep releasing expired reservations back to `available`; separate from the checkout request path.
 
+## Data Model
+- `StockRecords`: composite key `(sku, warehouse_id)` → `on_hand`, `reserved`; updated only via atomic conditional writes, indexed by `sku` alone as well so `ReservationSplitter` can pull cross-warehouse availability in one query.
+- `Reservations`: `id`, `cart_id` (unique — the idempotency key), `expires_at`, `status`.
+- `ReservationLines`: `reservation_id`, `sku`, `warehouse_id`, `quantity` — split out from `Reservations` because one reservation can span multiple `StockRecords` across warehouses.
+- `Orders` reference confirmed `Reservations` by id rather than copying quantities, so the two can never drift apart.
+
+## Sequence Flows
+- Reserve: `POST /reservations` reads `available` across candidate warehouses → `ReservationSplitter` decides the allocation → `StockLedger` applies an atomic conditional update per `StockRecord` in the split, each line tracked so a partial failure rolls back only its own line → `Reservation` + `ReservationLines` written with `expires_at` set. Synchronous end to end.
+- Confirm: `POST /reservations/{id}/confirm` checks `expires_at` → each `StockRecord` line is confirmed independently and idempotently (reserved → deducted `on_hand`) → the `Order` is marked complete only once every line has confirmed, not on the first successful line.
+
 ## Edge Cases & Failure Modes
 - Two checkouts race for the last unit of a SKU — `StockLedger`'s atomic conditional update guarantees only one reservation succeeds; the second gets an immediate out-of-stock response rather than a reservation that later fails to confirm.
 - A reservation spans two warehouses and one warehouse's confirm succeeds while the other fails (e.g., a downstream outage) — confirmation is per-StockRecord and idempotent, so a retry only re-attempts the failed part, and the order isn't marked complete until every part confirms.

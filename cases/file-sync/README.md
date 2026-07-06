@@ -35,6 +35,16 @@ A file storage product needs to sync files across a user's devices, some of whic
 - `SyncCursorTracker` — per-device bookkeeping of what's been pulled; decoupled from `VersionStore` so a device's catch-up progress doesn't affect other devices' view of the version chain.
 - `ConflictResolver` — applies a resolution decision; for "keep both," it creates a new File rather than trying to merge content the service doesn't understand.
 
+## Data Model
+- `Files`: `id`, `current_latest_version_id`.
+- `FileVersions`: `id`, `file_id`, `parent_version_id`, content pointer/hash, `created_by_device_id`, `created_at` — append-only, indexed on `(file_id, created_at)` to serve "since cursor" queries without scanning the whole table.
+- `SyncCursors`: `(device_id, file_id)` → `last_synced_version_id` — small and hot, read/written on every sync round trip, kept as its own table rather than a column on `FileVersions` so per-device bookkeeping doesn't bloat the version history.
+- `Conflicts`: `id`, `file_id`, `losing_version_id`, `current_latest_version_id`, `resolved_at` nullable.
+
+## Sequence Flows
+- Normal push: device uploads a `FileVersion` with `parent = current latest` → `VersionStore` atomically checks the parent match and appends → that device's `SyncCursor` advances. Accept is synchronous; propagation to other devices is asynchronous — they pull (or get pushed a notification to pull) on their own schedule.
+- Conflict: device uploads with a stale parent → `ConflictDetector` creates a `Conflict` row instead of appending as new latest → client or user calls `POST /conflicts/{id}/resolve` → `ConflictResolver` applies the resolution synchronously within that call, creating a new `File` for "keep both" rather than attempting a merge.
+
 ## Edge Cases & Failure Modes
 - Device uploads based on a stale parent because it was offline during someone else's edit — `ConflictDetector` catches this by parent-version mismatch, not by comparing content, so it works the same regardless of file type.
 - Two devices come online and both try to push conflicting versions at nearly the same time — `VersionStore`'s append is atomic on "does this upload's parent equal current latest," so only one can land as the new latest; the second is deterministically routed into conflict handling, not a race with an unpredictable winner.

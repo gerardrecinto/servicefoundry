@@ -35,6 +35,15 @@ Multiple product teams need to turn features on/off and roll them out gradually 
 - `SnapshotPublisher` — pushes updated flag definitions out to `FlagSnapshotStore` instances; the only module aware of how propagation actually happens (poll, push, pub/sub).
 - `KillSwitch` — a narrow, separate path that can override a Flag's evaluation to its safe default, deliberately not routed through the normal rule-update flow so it isn't slowed down by anything rule-related during an incident.
 
+## Data Model
+- Source-of-truth store: `flag_key` → ordered `TargetingRules` + default value, versioned on every update; normalized for editing and auditability, not for read speed.
+- `FlagSnapshotStore`: a denormalized, pre-serialized blob per flag, optimized for fast local reads in-process — deliberately a different shape than the source-of-truth store, since the two serve opposite access patterns (rare writes vs. every-request reads).
+- No per-evaluation record is persisted — `EvaluationContext` and its result are ephemeral, never written to a database, to keep `evaluate()` free of any write-path cost on the hot path.
+
+## Sequence Flows
+- Flag update: `PUT /flags/{key}` writes the source-of-truth store → `SnapshotPublisher` pushes (or the next poll pulls) the change to every `FlagSnapshotStore` replica → local `RuleEvaluator` calls start returning the new value. The write API returns once persisted, not once every replica has caught up — propagation is asynchronous by design.
+- `evaluate()`: entirely local and synchronous — `RuleEvaluator` reads `FlagSnapshotStore` in-process with no network hop, accepting bounded staleness in exchange for hot-path speed (see Tradeoffs).
+
 ## Edge Cases & Failure Modes
 - `SnapshotPublisher` fails to reach a given service instance — that instance keeps evaluating against its last-known-good snapshot rather than failing evaluation entirely; a stale-but-valid flag state is preferred over no flag state.
 - A percentage-rollout rule needs to give the same user a consistent result across repeated evaluations — bucketing is a deterministic hash of (flag_key, user_id), not random per call, so the same user doesn't flip in and out of a rollout on every page load.

@@ -36,6 +36,16 @@ A ride-hailing app needs to match a rider's request to a nearby available driver
 - `RideLifecycle` — the only module that transitions RideRequest/Trip state; consumes events from `MatchOffer` and driver/rider actions.
 - `LocationIngest` — high-frequency driver location updates land here and update a fast-read location index; deliberately isolated from `Matcher`'s ranking logic so location volume can scale independently of matching logic changes.
 
+## Data Model
+- `RideRequests`: `id`, `client_request_id` (unique — idempotency), `rider_id`, `pickup_location`, `status`.
+- `DriverLocations`: `driver_id` → `last_location`, `updated_at`, `availability` — written at high frequency by `LocationIngest`, backed by a fast key-value store rather than the relational store holding `RideRequests`, since its read/write pattern and volume are entirely different (see Tradeoffs on isolating location updates).
+- `Matches`: `id`, `ride_request_id`, `driver_id`, `offered_at`, `deadline`, `response` — a `RideRequest` accumulates many `Match` rows over its lifetime as candidates decline.
+- `Trips`: created 1:1 from an accepted `Match`, tracking pickup/drop-off timestamps.
+
+## Sequence Flows
+- Match: `POST /ride-requests` → `Matcher` queries `DriverLocations` for nearby available drivers → creates a `Match` with a response deadline → the offer goes to the top candidate. Creation is synchronous; the driver's response is asynchronous, arriving via the driver app's own call or poll.
+- Decline/timeout cascade: driver declines, or `MatchOffer`'s deadline fires → both treated identically → `Matcher` re-ranks the remaining candidates → a new `Match` row is created for the next driver. This is a loop bounded by a max-candidates limit, not a recursive call, so a request can't retry forever when no drivers are available.
+
 ## Edge Cases & Failure Modes
 - Driver doesn't respond to a Match before the deadline — treated the same as an explicit decline; `MatchOffer` expires it and `Matcher` offers the next candidate, without the rider seeing a gap.
 - Rider cancels exactly as a driver accepts — the accept and the cancel race; `RideLifecycle` resolves this by treating a cancel as valid up until `driver_en_route` is durably recorded, after which cancellation still succeeds but is flagged as a late cancellation, since a driver has already committed.

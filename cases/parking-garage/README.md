@@ -38,6 +38,16 @@ A garage operator wants to charge for parking without staffed booths — ticket 
 - `OccupancyTracker` — increments/decrements per-level counts from entry/exit events; deliberately decoupled from `TicketLifecycle` so a ticketing bug can't also corrupt occupancy, and vice versa.
 - `PaymentGateway` — adapter over the external processor; `TicketLifecycle` depends on its interface, not its implementation.
 
+## Data Model
+- `Tickets`: `id`, `lane_id`, `entry_sensor_event_id` (unique — idempotency), `entry_time`, `vehicle_class`, `rate_schedule_version` (locked at entry), `status`.
+- `RateSchedules`: versioned, `effective_from`/`effective_to`, keyed by `(vehicle_class, duration_bucket, time_of_day)` → fee.
+- `Payments`: `ticket_id`, `processor_idempotency_key` (unique), `amount`, `status`.
+- `Levels`: `id`, `capacity`, `live_count` — `live_count` is a derived, cached counter explicitly reconciled nightly against a count of open Tickets per level, not treated as the source of truth (per Edge Cases).
+
+## Sequence Flows
+- Entry: sensor event → `POST /tickets` deduped on `entry_sensor_event_id` → `Ticket` created referencing the `RateSchedule` version active right now → `OccupancyTracker` increments the level's `live_count` on a write path separate from ticket creation, so a ticketing bug can't corrupt occupancy.
+- Exit: `GET /quote` (pure, repeatable) → `POST /pay` (idempotent on the processor key) → `POST /exit` checks `paid` state and opens the gate — a strictly synchronous chain end to end, since the 2-second gate SLA spans the whole sequence.
+
 ## Edge Cases & Failure Modes
 - Entry sensor fires twice for one car — idempotency key collapses it to one Ticket.
 - Driver pays, then the gate fails to open — `exit` is safe to retry; it checks `paid` state rather than re-charging.
