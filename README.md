@@ -21,6 +21,7 @@ Each case in `cases/` starts from a vague one-paragraph product ask and works th
 - `templates/` — the reusable section templates every case follows
 - `docs/design-playbook.md` — the step-by-step method used across cases
 - `docs/design-rubric.md` — a checklist for grading a design write-up
+- `docs/case-lld-oop-map.md` — quick map from each case to LLD, OOP, SOLID, and clean-code concepts
 - `docs/adr/` — architecture decision records for choices made in this repo itself
 
 ## Cases
