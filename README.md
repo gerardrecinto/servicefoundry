@@ -17,12 +17,12 @@ Each case in `cases/` starts from a vague one-paragraph product ask and works th
 
 ## Structure
 
-- `cases/` — worked design case studies, one per service
-- `templates/` — the reusable section templates every case follows
-- `docs/design-playbook.md` — the step-by-step method used across cases
-- `docs/design-rubric.md` — a checklist for grading a design write-up
-- `docs/case-lld-oop-map.md` — quick map from each case to LLD, OOP, SOLID, and clean-code concepts
-- `docs/adr/` — architecture decision records for choices made in this repo itself
+- `cases/`: worked design case studies, one per service
+- `templates/`: the reusable section templates every case follows
+- `docs/design-playbook.md`: the step-by-step method used across cases
+- `docs/design-rubric.md`: a checklist for grading a design write-up
+- `docs/case-lld-oop-map.md`: quick map from each case to LLD, OOP, SOLID, and clean-code concepts
+- `docs/adr/`: architecture decision records for choices made in this repo itself
 
 ## Cases
 
@@ -41,8 +41,8 @@ Each case in `cases/` starts from a vague one-paragraph product ask and works th
 
 ## Using a template for a new case
 
-Copy `templates/*.md` into a new folder under `cases/<name>/`, or write a single `README.md` following the same section order. Start from a one-paragraph, intentionally vague product ask and work outward — the value is in resolving the ambiguity, not in the diagram.
+Copy `templates/*.md` into a new folder under `cases/<name>/`, or write a single `README.md` following the same section order. Start from a one-paragraph, intentionally vague product ask and work outward: the value is in resolving the ambiguity, not in the diagram.
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT: see [LICENSE](LICENSE).
