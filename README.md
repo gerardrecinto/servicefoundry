@@ -43,6 +43,17 @@ Each case in `cases/` starts from a vague one-paragraph product ask and works th
 
 Copy `templates/*.md` into a new folder under `cases/<name>/`, or write a single `README.md` following the same section order. Start from a one-paragraph, intentionally vague product ask and work outward: the value is in resolving the ambiguity, not in the diagram.
 
+## Reference implementations
+
+Some cases (`feature-flag-service`, `file-sync`, `rate-limiter`, `ticket-booking`) include a runnable reference implementation alongside the design write-up, demonstrating the key mechanism the write-up argues for (deterministic bucketing, conflict detection, token-bucket limiting, compare-and-set seat holds) rather than a full service.
+
+Run all of them and check nothing regressed:
+
+```bash
+scripts/run_examples.sh        # the Python reference solutions
+scripts/run_examples.sh --all  # also the Java/Go/Ruby/C++ rate-limiter solutions, if those toolchains are installed
+```
+
 ## License
 
 MIT: see [LICENSE](LICENSE).
