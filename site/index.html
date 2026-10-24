@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>servicefoundry: design practice with running code</title>
+<meta name="description" content="Run the token bucket rate limiter and the feature flag evaluator from the repo in your browser, and browse ten service design cases.">
+<meta property="og:title" content="servicefoundry">
+<meta property="og:description" content="Run the token bucket rate limiter and the feature flag evaluator from the repo in your browser, and browse ten service design cases.">
+<meta property="og:type" content="website">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%2314b8a6'/%3E%3Ccircle cx='16' cy='16' r='6' fill='none' stroke='%23fff' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+
+:root{--bg:#f8fafc;--panel:#fff;--panel2:#f1f5f9;--line:#e2e8f0;--fg:#0f172a;--mute:#475569;--brand:#0f766e;--brand-bg:#ccfbf1;--ok:#047857;--ok-bg:#d1fae5;--err:#b91c1c;--err-bg:#fee2e2;--code:#0b1220;--code-fg:#e2e8f0}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]){--bg:#070d1a;--panel:#0d1526;--panel2:#111c33;--line:#1e2b47;--fg:#e8eefc;--mute:#9fb0cc;--brand:#2dd4bf;--brand-bg:#062f2b;--ok:#34d399;--ok-bg:#06382b;--err:#fca5a5;--err-bg:#3b1212}}
+:root[data-theme=dark]{--bg:#070d1a;--panel:#0d1526;--panel2:#111c33;--line:#1e2b47;--fg:#e8eefc;--mute:#9fb0cc;--brand:#2dd4bf;--brand-bg:#062f2b;--ok:#34d399;--ok-bg:#06382b;--err:#fca5a5;--err-bg:#3b1212}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.6 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;-webkit-font-smoothing:antialiased}
+a{color:var(--brand)}
+code,pre,textarea,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.wrap{max-width:1080px;margin:0 auto;padding:0 16px}
+nav{position:sticky;top:0;z-index:5;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+nav .wrap{display:flex;align-items:center;justify-content:space-between;height:56px;gap:12px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;color:var(--fg);text-decoration:none}
+.logo i{width:22px;height:22px;border-radius:6px;background:#14b8a6;display:inline-block}
+nav .links{display:flex;gap:18px;align-items:center;font-size:14px}
+nav .links a{color:var(--mute);text-decoration:none}
+nav .links a:hover{color:var(--fg)}
+.btn{display:inline-flex;align-items:center;gap:8px;padding:10px 18px;border-radius:10px;font-weight:600;text-decoration:none;border:1px solid var(--line);color:var(--fg);background:var(--panel);cursor:pointer;font-size:15px}
+.btn.primary{background:#14b8a6;border-color:#14b8a6;color:#04211e}
+.btn.primary:hover{background:#2dd4bf}
+.btn:focus-visible,textarea:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid #14b8a6;outline-offset:2px}
+.hero{padding:72px 0 40px;text-align:center}
+.pill{display:inline-block;font-size:13px;color:var(--brand);background:var(--brand-bg);padding:4px 12px;border-radius:99px;margin-bottom:20px;font-weight:600}
+h1{font-size:clamp(34px,6vw,58px);line-height:1.08;margin:0 0 18px;letter-spacing:-.02em}
+h1 em{font-style:normal;color:var(--brand)}
+.lede{max-width:700px;margin:0 auto 28px;color:var(--mute);font-size:18px}
+.cta{display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+.stats{display:flex;gap:28px;justify-content:center;flex-wrap:wrap;margin-top:36px;color:var(--mute);font-size:14px}
+.stats b{display:block;color:var(--fg);font-size:22px}
+section{padding:56px 0}
+h2{font-size:clamp(26px,4vw,36px);margin:0 0 8px;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:0 0 28px;max-width:720px}
+.lab{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:860px){.lab{grid-template-columns:minmax(0,1fr)}nav .links .hide-s{display:none}}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden;min-width:0}
+.card h3{margin:0;padding:12px 16px;font-size:13px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);border-bottom:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.tools{display:flex;gap:6px;flex-wrap:wrap}
+.chip{font:600 12px system-ui;padding:5px 10px;border-radius:8px;border:1px solid var(--line);background:var(--panel2);color:var(--fg);cursor:pointer;text-transform:none;letter-spacing:0}
+.chip[aria-pressed=true]{background:var(--brand-bg);border-color:var(--brand);color:var(--brand)}
+#log{display:block;width:100%;height:420px;border:0;padding:12px 14px;font-size:12.5px;line-height:1.55;background:var(--code);color:var(--code-fg);resize:vertical;white-space:pre;overflow:auto}
+.src{display:flex;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid var(--line);font-size:13px;color:var(--mute);flex-wrap:wrap}
+.out{min-height:420px}
+.status{padding:16px;color:var(--mute);font-size:14px}
+.verdict{padding:18px 16px;border-bottom:1px solid var(--line);background:var(--err-bg)}
+.verdict.unknown{background:var(--panel2)}
+.verdict b{display:block;font-size:20px;text-transform:uppercase;letter-spacing:.04em;color:var(--err)}
+.verdict.unknown b{color:var(--mute)}
+.verdict span{font-size:14px;color:var(--mute)}
+.sec{padding:14px 16px;border-bottom:1px solid var(--line)}
+.sec:last-child{border-bottom:0}
+.sec h4{margin:0 0 8px;font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute)}
+.bar{height:10px;border-radius:99px;background:var(--panel2);overflow:hidden;max-width:260px;display:inline-block;vertical-align:middle;margin-right:10px;width:60%}
+.bar i{display:block;height:100%;background:#14b8a6}
+.site{padding:8px 0;border-bottom:1px dashed var(--line);font-size:13.5px}
+.site:last-child{border:0}
+.site code{background:var(--panel2);padding:1px 6px;border-radius:5px;font-size:12px}
+.fix{background:var(--ok-bg);color:var(--ok);padding:10px 12px;border-radius:8px;font-size:14px}
+.note{font-size:13px;color:var(--mute);margin-top:12px}
+.steps{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media (max-width:860px){.steps{grid-template-columns:minmax(0,1fr)}}
+.step{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:20px}
+.step .n{width:28px;height:28px;border-radius:8px;background:var(--brand-bg);color:var(--brand);display:grid;place-items:center;font-weight:700;margin-bottom:10px}
+.step h3{margin:0 0 6px;font-size:17px}
+.step p{margin:0;color:var(--mute);font-size:15px}
+.tw{background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow-x:auto;max-width:100%}
+table{width:100%;min-width:560px;border-collapse:collapse;font-size:14px}
+th,td{text-align:left;padding:12px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--mute);background:var(--panel2)}
+tr:last-child td{border-bottom:0}
+td:first-child{font-family:ui-monospace,monospace;font-weight:700;white-space:nowrap}
+.install pre{background:var(--code);color:var(--code-fg);padding:16px;border-radius:12px;overflow-x:auto;font-size:13.5px;margin:0 0 12px}
+.cols2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:860px){.cols2{grid-template-columns:minmax(0,1fr)}}
+.limits{background:var(--panel);border:1px solid var(--line);border-left:4px solid #f59e0b;border-radius:10px;padding:16px 20px}
+.limits ul{margin:8px 0 0;padding-left:20px;color:var(--mute)}
+footer{border-top:1px solid var(--line);padding:32px 0;color:var(--mute);font-size:14px}
+footer .wrap{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0)}
+
+.ctrl{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 14px;border-top:1px solid var(--line)}
+.ctrl label{font-size:13px;color:var(--mute)}
+.ctrl select,.ctrl input[type=number]{background:var(--panel2);color:var(--fg);border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px}
+.ctrl input[type=range]{accent-color:var(--brand);flex:1;min-width:120px}
+.clock{font:700 13px ui-monospace,monospace;padding:4px 10px;border-radius:8px;background:var(--panel2)}
+.logbox{max-height:300px;overflow:auto}
+.ln{padding:8px 14px;border-bottom:1px solid var(--line);font-size:13px;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.ln:last-child{border:0}
+.pill2{font:700 11px ui-monospace,monospace;padding:2px 8px;border-radius:6px}
+.pill2.y{background:var(--ok-bg);color:var(--ok)} .pill2.n{background:var(--err-bg);color:var(--err)}
+.users{display:grid;grid-template-columns:repeat(auto-fill,minmax(88px,1fr));gap:6px;padding:14px}
+.u{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font:600 11px ui-monospace,monospace;background:var(--panel2);text-align:center}
+.u.on{background:var(--ok-bg);color:var(--ok);border-color:var(--ok)}
+.u small{display:block;color:var(--mute);font-weight:400}
+.sim{display:inline-block;font:700 11px ui-monospace,monospace;color:var(--brand);background:var(--brand-bg);padding:2px 8px;border-radius:6px;margin-left:8px}
+.tw table{min-width:480px}
+</style>
+</head>
+<body>
+<nav><div class="wrap">
+  <a class="logo" href="#top"><i></i>servicefoundry</a>
+  <div class="links"><a href="#try" class="hide-s">Try it</a><a href="#cases" class="hide-s">Cases</a><a href="#install" class="hide-s">Run</a><a class="btn" href="https://github.com/gerardrecinto/servicefoundry">GitHub</a></div>
+</div></nav>
+
+<header class="hero" id="top"><div class="wrap">
+  <h1>Turn a vague product ask into a <em>service design</em>.</h1>
+  <p class="lede">Ten worked case studies, from a one-paragraph requirement to domain model, API contract, edge cases and trade-offs. Four ship a reference implementation of the key mechanism.</p>
+  <div class="cta"><a class="btn primary" href="#try">Run a reference design</a><a class="btn" href="#cases">Browse the cases</a></div>
+  <div class="stats"><div><b>10</b>design cases</div><div><b>4</b>with runnable code</div><div><b>5</b>languages for the rate limiter</div></div>
+</div></header>
+
+
+<section id="try"><div class="wrap">
+  <h2>Run two of the reference designs</h2>
+  <p class="sub">Each case argues for a mechanism, then ships a small implementation of it. These two run the repo's real <code>solution.py</code> files in your browser. The clients and users are made up.</p>
+
+  <h3 style="margin:24px 0 10px">1. Rate limiter: token bucket per tier</h3>
+  <div class="lab">
+    <div class="card">
+      <h3><span>Requests <span class="sim">SIMULATED CLOCK</span></span><span class="tools"><button class="chip" id="rl-reset">Reset</button></span></h3>
+      <div class="ctrl"><label for="rl-c">client</label>
+        <select id="rl-c"><option value="acme-free">acme-free (3 per second)</option><option value="acme-paid">acme-paid (10 per second)</option></select>
+        <span class="clock" id="rl-t">t = 0.000s</span></div>
+      <div class="ctrl"><button class="btn primary" id="rl-1" type="button">Send 1</button><button class="btn" id="rl-5" type="button">Send burst of 5</button><button class="btn" id="rl-w" type="button">Wait retry_after</button><label for="rl-adv">or advance</label><select id="rl-adv"><option value="0.1">0.1s</option><option value="0.5">0.5s</option><option value="1">1s</option></select><button class="btn" id="rl-a" type="button">Advance</button></div>
+    </div>
+    <div class="card"><h3><span>Decisions</span></h3><div class="logbox" id="rl-log" aria-live="polite"><div class="status" id="boot">Loading the reference code (about 10 MB the first time, cached after)...</div></div></div>
+  </div>
+
+  <h3 style="margin:32px 0 10px">2. Feature flags: deterministic rollout</h3>
+  <div class="lab">
+    <div class="card">
+      <h3><span>Flag <code>new-checkout</code> <span class="sim">SIMULATED USERS</span></span></h3>
+      <div class="ctrl"><label for="ff-p">rollout <b id="ff-pv">25</b>%</label><input id="ff-p" type="range" min="0" max="100" value="25"></div>
+      <div class="ctrl"><label><input type="checkbox" id="ff-e" checked> employees always on</label><label><input type="checkbox" id="ff-k"> kill switch</label></div>
+      <div class="note" style="padding:0 14px 14px;margin:0">First matching rule wins. A killed flag returns its default for everyone, employees included.</div>
+    </div>
+    <div class="card"><h3><span>Evaluation</span><span id="ff-sum" class="clock"></span></h3><div class="users" id="ff-users" aria-live="polite"></div></div>
+  </div>
+  <p class="note">The same user always lands in the same bucket, so raising the rollout only adds users and nobody flips off. Move the slider up and down to see it.</p>
+</div></section>
+
+<section><div class="wrap">
+  <h2>How a case is built</h2>
+  <p class="sub">Each case starts from a vague one-paragraph ask and resolves the ambiguity, which is the real work.</p>
+  <div class="steps">
+    <div class="step"><div class="n">1</div><h3>Pin the problem</h3><p>Requirements, scope and what is out of scope, then a domain model with clear ownership of state.</p></div>
+    <div class="step"><div class="n">2</div><h3>Design the contract</h3><p>API operations with idempotency and error semantics, class responsibilities, and a data model.</p></div>
+    <div class="step"><div class="n">3</div><h3>Argue the trade-offs</h3><p>Edge cases, rejected options with reasons, a testing strategy and operational notes. Some cases include code that proves the key mechanism.</p></div>
+  </div>
+</div></section>
+
+<section id="cases"><div class="wrap">
+  <h2>The ten cases</h2>
+  <div class="tw"><table><thead><tr><th>Case</th><th>Focus</th><th>Includes</th></tr></thead><tbody><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/locker-service">locker-service</a></td><td>reservations, expiration, access codes, capacity</td><td>design write-up</td></tr><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/parking-garage">parking-garage</a></td><td>pricing, ticketing, sensors, payments</td><td>design write-up</td></tr><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/package-delivery">package-delivery</a></td><td>routing, driver assignment, package state, retries</td><td>design write-up</td></tr><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/rate-limiter">rate-limiter</a></td><td>token bucket, distributed limits, backpressure</td><td>design and runnable reference</td></tr><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/ticket-booking">ticket-booking</a></td><td>seat holds, concurrency, overselling prevention</td><td>design and runnable reference</td></tr><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/notification-platform">notification-platform</a></td><td>multi-channel delivery, templates, retries, idempotency</td><td>design write-up</td></tr><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/inventory-reservation">inventory-reservation</a></td><td>stock holds, checkout, cancellation, concurrency</td><td>design write-up</td></tr><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/ride-dispatch">ride-dispatch</a></td><td>matching, driver state machine, location ingest</td><td>design write-up</td></tr><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/file-sync">file-sync</a></td><td>conflict resolution, versioning, offline writes</td><td>design and runnable reference</td></tr><tr><td><a href="https://github.com/gerardrecinto/servicefoundry/tree/main/cases/feature-flag-service">feature-flag-service</a></td><td>targeting rules, evaluation, caching, safe rollout</td><td>design and runnable reference</td></tr></tbody></table></div>
+  <p class="note">The rate limiter also has Java, Go, C++ and Ruby versions in the repo.</p>
+</div></section>
+
+<section id="install" class="install"><div class="wrap">
+  <h2>Run them yourself</h2>
+  <div class="cols2">
+    <div>
+<pre>git clone https://github.com/gerardrecinto/servicefoundry.git
+cd servicefoundry
+scripts/run_examples.sh        # Python solutions
+scripts/run_examples.sh --all  # also Java, Go, Ruby, C++</pre>
+    </div>
+    <div>
+<pre>templates/        # section templates every case follows
+docs/design-playbook.md
+docs/design-rubric.md</pre>
+      <p class="note">Copy the templates into <code>cases/&lt;name&gt;/</code> to start a new case.</p>
+    </div>
+  </div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="limits">
+    <strong>What this does not do</strong>
+    <ul>
+      <li>These are practice designs and focused reference code, not deployable services.</li>
+      <li>Only four cases have code. The other six are design write-ups.</li>
+      <li>The rate limiter keeps state in one process. The write-up discusses distributed limits, and the code does not implement them.</li>
+    </ul>
+  </div>
+</div></section>
+
+
+<footer><div class="wrap">
+  <span>servicefoundry. MIT licensed. Built by <a href="https://github.com/gerardrecinto">Gerard Recinto</a>.</span>
+  <span><a href="https://github.com/gerardrecinto/servicefoundry">Source</a> &middot; <a href="https://github.com/gerardrecinto/servicefoundry/releases">Releases</a></span>
+</div></footer>
+<script src="https://cdn.jsdelivr.net/pyodide/v0.26.4/full/pyodide.js"></script>
+<script>
+
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+  let py = null, t = 0, last = {};
+  const track = (n) => { try { if (window.plausible) window.plausible(n); } catch (e) {} };
+  const PY = `
+import json
+import rate_limiter as rl
+import feature_flags as ff
+def fresh():
+    global LIM
+    free = rl.Tier("free", limit=3, window_seconds=1.0)
+    paid = rl.Tier("paid", limit=10, window_seconds=1.0)
+    LIM = rl.RateLimiter(rl.TierResolver({"acme-paid": paid}, default=free))
+fresh()
+def check(client, now):
+    ok, ra = LIM.check(client, now=now)
+    return json.dumps({"ok": ok, "retry": ra})
+def flags(pct, employees, killed):
+    store = ff.FlagSnapshotStore()
+    rules = []
+    if employees:
+        rules.append(ff.attribute_rule("internal-allowlist", "is_employee", True, True))
+    rules.append(ff.percentage_rule("rollout", "new-checkout", pct, True))
+    store.publish(ff.Flag(key="new-checkout", rules=rules, default=False))
+    if killed:
+        store.kill("new-checkout")
+    out = []
+    for i in range(1, 41):
+        emp = i % 8 == 0
+        uid = "user-%d" % i
+        out.append({"id": uid, "emp": emp, "bucket": ff.deterministic_bucket("new-checkout", uid), "on": bool(store.evaluate("new-checkout", {"user_id": uid, "is_employee": emp}))})
+    big = sum(1 for i in range(2000) if store.evaluate("new-checkout", {"user_id": "u%d" % i, "is_employee": False}))
+    return json.dumps({"users": out, "big": big})
+`;
+  function logRow(h) { const b = $("rl-log"); if (b.querySelector(".status")) b.innerHTML = ""; b.insertAdjacentHTML("afterbegin", h); }
+  function send(n) {
+    const c = $("rl-c").value;
+    for (let i = 0; i < n; i++) {
+      const r = JSON.parse(py.runPython(`check(${JSON.stringify(c)}, ${t})`)); last[c] = r;
+      logRow(`<div class="ln"><span class="clock">t=${t.toFixed(3)}s</span> <code>${esc(c)}</code> <span class="pill2 ${r.ok ? "y" : "n"}">${r.ok ? "ALLOWED" : "DENIED"}</span>${r.ok ? "" : `<span>retry_after=${r.retry.toFixed(3)}s</span>`}</div>`);
+    }
+    track("sf_send");
+  }
+  const tick = (d) => { t = t + d; $("rl-t").textContent = "t = " + t.toFixed(3) + "s"; };
+  $("rl-1").addEventListener("click", () => send(1));
+  $("rl-5").addEventListener("click", () => send(5));
+  $("rl-a").addEventListener("click", () => { tick(+$("rl-adv").value); logRow(`<div class="ln"><span class="clock">t=${t.toFixed(3)}s</span> clock advanced</div>`); });
+  $("rl-w").addEventListener("click", () => { const r = last[$("rl-c").value]; if (!r || r.ok) { logRow('<div class="ln">Nothing to wait for. Send requests until one is denied.</div>'); return; } tick(r.retry); logRow(`<div class="ln"><span class="clock">t=${t.toFixed(3)}s</span> waited exactly retry_after</div>`); send(1); });
+  $("rl-reset").addEventListener("click", () => { py.runPython("fresh()"); t = 0; last = {}; tick(0); $("rl-log").innerHTML = '<div class="status">Reset. All buckets are full.</div>'; });
+
+  function flags() {
+    const r = JSON.parse(py.runPython(`flags(${+$("ff-p").value}, ${$("ff-e").checked ? "True" : "False"}, ${$("ff-k").checked ? "True" : "False"})`));
+    $("ff-users").innerHTML = r.users.map((u) => `<div class="u ${u.on ? "on" : ""}">${u.id}<small>bucket ${u.bucket}${u.emp ? ", staff" : ""}</small></div>`).join("");
+    $("ff-sum").textContent = (r.big / 20).toFixed(1) + "% of 2000 non-staff on";
+  }
+  $("ff-p").addEventListener("input", () => { $("ff-pv").textContent = $("ff-p").value; flags(); });
+  $("ff-e").addEventListener("change", () => { flags(); track("sf_ff"); });
+  $("ff-k").addEventListener("change", () => { flags(); track("sf_kill"); });
+
+  (async () => {
+    try {
+      py = await loadPyodide();
+      for (const f of ["rate_limiter.py", "feature_flags.py"]) { const r = await fetch("py/" + f); if (!r.ok) throw new Error("could not load " + f); py.FS.writeFile("/lib/" + f, await r.text()); }
+      py.runPython("import sys; sys.path.insert(0, '/lib')"); py.runPython(PY);
+      window.__SF_READY__ = true; $("rl-log").innerHTML = '<div class="status">Ready. Send a burst from the free client, then wait the suggested retry_after.</div>'; flags();
+    } catch (e) { $("boot").textContent = "The in-browser examples did not load (" + String(e.message || e).split("\n").pop() + "). Run scripts/run_examples.sh instead."; }
+  })();
+})();
+
+</script>
+</body>
+</html>
