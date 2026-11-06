@@ -1,6 +1,6 @@
 # Case to LLD / OOP Map
 
-Use this as the quick interview-prep map for what each case is really testing.
+Use this as the quick map for what each case is really testing.
 
 ## Fast Pattern Key
 
@@ -33,7 +33,7 @@ Use this as the quick interview-prep map for what each case is really testing.
 
 ## What To Say Out Loud
 
-If you need a compact interview answer:
+A compact version:
 
 > I start by finding the domain objects and the state machines. Then I isolate the modules that own mutation, make retries idempotent, and keep external systems behind adapters. For SOLID, most of these designs are about SRP, OCP, and DIP: one class owns one business rule, algorithms can change behind interfaces, and domain logic does not depend directly on providers, devices, or databases.
 
